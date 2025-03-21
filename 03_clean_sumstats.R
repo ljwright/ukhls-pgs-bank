@@ -20,6 +20,12 @@ tibble(line = read_lines("Code/02_download_sumstats.R")) %>%
   pull(line) %>%
   glue_collapse("\n")
 
+check_remaining <- function(){
+  files_s <- list.files("Source Data", "\\.txt\\.gz$")
+  file_c <- list.files("Data/step_03", "\\.txt\\.gz$")
+  setdiff(files_s, file_c)
+}
+
 # dir_delete("Data/step_03")
 # dir_create("Data/step_03")
 
@@ -37,9 +43,9 @@ add_gz <- function(file){
   return(file)
 }
 
-open_source <- function(file, col_nums = matches(".*"), n_max = Inf, skip = 0){
+open_source <- function(file, col_nums = matches(".*"), n_max = Inf, skip = 0, delim = "\t"){
   vroom(glue("Source Data/{add_gz(file)}"),
-        delim = "\t", n_max = n_max, skip = skip, 
+        delim = delim, n_max = n_max, skip = skip, 
         col_select = col_nums,
         col_types = cols(.default = col_character()))
 }
@@ -74,9 +80,6 @@ save_sumstats <- function(df, file_name){
 }
 
 
-
-
-
 # 2. Download Summary Statistics ----
 ## a. Health Behaviour ----
 ### i. Addictive Behaviour (Hatoum et al., 2023; 10.1038/s44220-023-00034-y) ----
@@ -85,7 +88,7 @@ open_source("hatoum_etal_2023_addictive_behaviour_grch38",
   rename(effect_allele = 3, other_allele = 4, beta = 5) %>%
   mutate(id = glue("chr{chr_name}:{chr_position}"),
          beta = as.double(beta),
-         p = 0) %>%
+         p = 1) %>%
   save_sumstats("hatoum_etal_2023_addictive_behaviour_grch37")
 
 ### ii. Alcohol and Cigarette Consumption (Liu et al., 2019; 10.1038/s41588-018-0307-5) ----
@@ -308,8 +311,20 @@ vroom("Source Data/bi_etal_2020_hypertension_rsid.txt.gz",
 
 
 ### x. Rheumatoid Arthritis (Ishigaki et al., 2022; 10.1038/s41588-022-01213-w) ----
+clean_ishigaki_etal_2022 <- function(file){
+  df <- open_source(file, c(2:6, 8)) %>%
+    rename(p = p_value)  %>%
+    mutate(id = glue("chr{chromosome}:{base_pair_location}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
 list.files("Source Data", "ishigaki_etal_2022") %>%
-  walk(check_head_df) # TODO
+  map(clean_ishigaki_etal_2022)
+
 
 ### xi. Type I Diabetes (Chiou et al., 2021; 10.1038/s41586-021-03552) ----
 open_source("chiou_etal_2021_t1d_grch38", c(2:6, 8)) %>%
@@ -318,57 +333,240 @@ open_source("chiou_etal_2021_t1d_grch38", c(2:6, 8)) %>%
          across(c(beta, p), as.double)) %>%
   save_sumstats("chiou_etal_2021_t1d_grch38")
 
+
 ### xi. Type II Diabetes (Suzuki et al., 2024; 10.1038/s41586-024-07019-6) ----
+clean_suzuki_etal_2024 <- function(file){
+  df <- open_source(file, c("Chromsome", "Position", "EffectAllele",
+                      "NonEffectAllele", "Pval", "Beta")) %>%
+    rename_with(str_to_lower) %>%
+    rename(chr = chromsome, pos = position,
+           effect_allele = effectallele, other_allele = noneffectallele,
+           p = pval, beta = beta) %>%
+    mutate(id = glue("chr{chr}:{pos}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+list.files("Source Data", "suzuki_etal_2024") %>%
+  map(clean_suzuki_etal_2024)
 
 
 ### xii. Waist-Hip Index (Christakoudi et al. 2021; 10.1038/s41598-021-89176-6) ----
+clean_christakoudi_etal_2021 <- function(file){
+  df <- open_source(file, c(1:5, 8)) %>%
+    rename(p = p_value) %>%
+    mutate(id = glue("chr{chromosome}:{base_pair_location}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+list.files("Source Data", "christakoudi_etal_2021") %>%
+  map(clean_christakoudi_etal_2021)
 
 
 ## d. Mental Health and Cognition ----
 ### i. ADHD (Demontis et al., 2023; 10.1038/s41588-022-01285-8) ----
+open_source("demontis_etal_2023_adhd_grch37",
+            c(1, 3:5, 9, 11), delim = " ") %>%
+  rename_with(str_to_lower) %>%
+  rename(effect_allele = a1, other_allele = a2) %>%
+  mutate(id = glue("chr{chr}:{bp}"),
+         across(c(or, p), as.double),
+         beta = log(or)) %>% # Available in OR, which can go in PRSice-2
+  save_sumstats("demontis_etal_2023_adhd_grch37")
 
 
 ### ii. Alzheimer's Disease (Bellenguez et al., 2022; 10.1038/s41588-022-01024-z) ----
+open_source("bellenguez_etal_2022_alzheimers_grch38", c(2:6, 11)) %>% # Also available in OR, which can go in PRSice-2
+  rename(p = p_value) %>%
+  mutate(id = glue("chr{chromosome}:{base_pair_location}"),
+         across(c(beta, p), as.double)) %>%
+  save_sumstats("bellenguez_etal_2022_alzheimers_grch38")
 
 
 ### iii. Panic Disorder (Forstner et al., 2021; 10.1038/s41380-019-0590-2) ----
+open_source("forstner_etal_2021_panic_disorder_grch37", 
+            c(1:2, 4:6, 8), skip = 72) %>%
+  rename_with(str_to_lower) %>%
+  rename(chr = 1, pos = 2, effect_allele = 3, other_allele = 4, p = 6) %>%
+  mutate(id = glue("chr{chr}:{pos}"),
+         across(c(beta, p), as.double)) %>%
+  save_sumstats("forstner_etal_2021_panic_disorder_grch37")
 
 
 ### iv. Autism Spectrum Disorder (Grove et al., 2019; 10.1038/s41588-019-0344-8) ----
+open_source("grove_etal_2019_autism_grch37", c(1, 3:5, 7, 9)) %>%
+  rename_with(str_to_lower) %>%
+  rename(effect_allele = a1, other_allele = a2) %>%
+  mutate(id = glue("chr{chr}:{bp}"),
+         across(c(or, p), as.double),
+         beta = log(or)) %>%
+  save_sumstats("grove_etal_2019_autism_grch37")
 
 
 ### v. Bipolar Disorder (Mullins et al., 2021; 10.1038/s41588-021-00857-4) ----
+clean_mullins_etal_2021 <- function(file){
+  df <- open_source(file, c(1:2, 4:6, 8), skip = 72) %>%
+    rename_with(str_to_lower) %>%
+    rename(chr = 1, effect_allele = 3, other_allele = 4, p = 6) %>%
+    mutate(id = glue("chr{chr}:{pos}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+list.files("Source Data", "mullins_etal_2021") %>%
+  map(clean_mullins_etal_2021)
 
 
 ### vi. Intelligence (Savage et al., 2018; 10.1038/s41588-018-0152-6) ----
-
+open_source("savage_etal_2018_intelligence_grch37", c(2:5, 8, 10)) %>%
+  rename(p = p_value) %>%
+  mutate(across(c(effect_allele, other_allele), str_to_upper),
+         id = glue("chr{chromosome}:{base_pair_location}"),
+         across(c(beta, p), as.double)) %>%
+  save_sumstats("savage_etal_2018_intelligence_grch37")
+         
 
 ### v. Hippocampal Volume (Liu et al., 2023; 10.1038/s41588-023-01425-8) ----
-
+# TODO: To decide.
 
 ### vi. Major Depressive Disorder (Howard et al., 2019; 10.1038/s41593-018-0326-7) ----
+clean_howard_etal_2019 <- function(file){
+  df <- open_source(file, c(1:3, 5, 7), delim = " ") %>%
+    rename(id = 1, effect_allele = 2, other_allele = 3, beta = 4, p = 5) %>%
+    mutate(across(c(effect_allele, other_allele), str_to_upper))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+list.files("Source Data", "howard_etal_2019") %>%
+  map(clean_howard_etal_2019)
 
 
 ### vii. Parkinson's Disease (Nalls et al., 2019; 10.1016/S1474-4422(19)30320-5) ----
+open_source("nalls_etal_2019_parkinsons_grch37", c(1:3, 5, 7)) %>%
+  rename_with(str_to_lower) %>%
+  rename(id = snp, effect_allele = a1, other_allele = a2, beta = b) %>%
+  mutate(across(c(beta, p), as.double)) %>%
+  save_sumstats("nalls_etal_2019_parkinsons_grch37")
 
 
-### vii. Schizophrenia (Trubetskoy et al., 2022; 10.1038/s41586-022-04434-5) ----
+### viii. Schizophrenia (Trubetskoy et al., 2022; 10.1038/s41586-022-04434-5) ----
+clean_trubetskov_etal_2022 <- function(file){
+  df <- open_source(file, c(1, 3:5, 9, 11), skip = 73) %>%
+    rename_with(str_to_lower) %>%
+    rename(effect_allele = a1, other_allele = a2, p = pval) %>%
+    mutate(id = glue("chr{chrom}:{pos}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
 
+list.files("Source Data", "trubetskov_etal_2022") %>%
+  map(clean_trubetskov_etal_2022)
 
 ## e. Personality ----
 ### i. Big 5 Personality Traits (Gupta et al., 2024; 10.1038/s41562-024-01951-3) ----
+clean_gupta_etal_2024 <- function(file){
+  df <- open_source(file, c(2:5, 7, 9)) %>%
+    rename_with(str_to_lower) %>%
+    rename(effect_allele = a1, other_allele = a2) %>%
+    mutate(id = glue("chr{chr}:{bp}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+list.files("Source Data", "gupta_etal_2024") %>%
+  map(clean_gupta_etal_2024)
 
 
 ## f. Social Outcomes ----
 ### i. Educational Attainmment (EA4) (Okbay et al., 2022; 10.1038/s41588-022-01016-z) ----
+clean_okbay_etal_2022 <- function(file){
+  df <- open_source(file, c(2:5, 7, 10)) %>%
+      rename_with(str_to_lower) %>%
+      mutate(id = glue("chr{chr}:{bp}"),
+             across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+c("okbay_etal_2022_eduyears_top_inc23andme_grch37",
+  "okbay_etal_2022_eduyears_all_excl3andme_grch37") %>%
+  map(clean_okbay_etal_2022)
+
+open_source("okbay_etal_2022_eduyears_top_exclukhls_grch37",
+            c(1:2, 5:6, 16:17)) %>%
+  rename_with(str_to_lower) %>%
+  rename(effect_allele = ea, other_allele = oa) %>%
+  mutate(id = glue("chr{chr}:{bp}"),
+         across(c(beta, p), as.double)) %>%
+  save_sumstats("okbay_etal_2022_eduyears_top_exclukhls_grch37")
 
 
 ### ii. Educational Attainmment (EA2) (Okbay et al., 2016; 10.1038/nature17671) ----
+clean_okbay_etal_2016 <- function(file){
+  df <- open_source(file, c(2:5, 7, 9)) %>%
+    rename_with(str_to_lower) %>%
+    rename(effect_allele = a1, other_allele = a2, p = pval) %>%
+    mutate(id = glue("chr{chr}:{pos}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+list.files("Source Data", "okbay_etal_2016") %>%
+  map(clean_okbay_etal_2016)
 
 
 ### iii. Household Income (Hill et al., 2019; 10.1038/s41467-019-13585-5) ----
+clean_hill_etal_2019 <- function(file){
+  df <- open_source(file, c(1, 3:6, 8), delim = " ") %>%
+    rename_with(str_to_lower) %>%
+    rename(other_allele = non_effect_allele) %>%
+    mutate(id = glue("chr{chr}:{bpos}"),
+           across(c(beta, p), as.double))
+
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
+
+list.files("Source Data", "hill_etal_2019") %>%
+  map(clean_hill_etal_2019)
 
 
 ### iv. Occupational Status (Akimova et al., 2024; 10.1038/s41562-024-02076-3) ----
+clean_akimova_etal_2024 <- function(file){
+  df <- open_source(file, c(1:5, 8))  %>%
+    rename(p = p_value) %>%
+    mutate(id = glue("chr{chromosome}:{base_pair_location}"),
+           across(c(beta, p), as.double))
+  
+  save_sumstats(df, file)
+  rm(df)
+  return(file)
+}
 
-# 2. 
+list.files("Source Data", "akimova_etal_2024") %>%
+  map(clean_akimova_etal_2024)

@@ -359,10 +359,10 @@ download_curl("http://ftp.ebi.ac.uk/pub/databases/gwas/summary_statistics/GCST90
 check_md5("bellenguez_etal_2022_alzheimers_grch38", "9d23b9ba23532da38ab83fb061bab18f")
 
 ### iii. Panic Disorder (Forstner et al., 2021; 10.1038/s41380-019-0590-2) ----
-download_curl(30731276, "forstner_etal_2021_panic_disorder_grch37")
+download_figshare(30731276, "forstner_etal_2021_panic_disorder_grch37")
 
 ### iv. Autism Spectrum Disorder (Grove et al., 2019; 10.1038/s41588-019-0344-8) ----
-download_curl(28169292, "grove_etal_2019_autism_grch37")
+download_figshare(28169292, "grove_etal_2019_autism_grch37")
 
 ### v. Bipolar Disorder (Mullins et al., 2021; 10.1038/s41588-021-00857-4) ----
 # TODO: Add medRxiv 2024 paper from same consortium?
@@ -403,7 +403,7 @@ gzip(glue("Source Data/nalls_etal_2019_parkinsons/nallsEtAl2019_excluding23andMe
      overwrite = FALSE, remove = FALSE)
 remove_excess_files("nalls_etal_2019_parkinsons")
 
-### vii. Schizophrenia (Trubetskoy et al., 2022; 10.1038/s41586-022-04434-5) ----
+### viii. Schizophrenia (Trubetskoy et al., 2022; 10.1038/s41586-022-04434-5) ----
 download_figshare(34517807, "trubetskov_etal_2022_schizophrenia_core_grch37")
 download_figshare(34517861, "trubetskov_etal_2022_schizophrenia_primary_grch37")
 download_figshare(34517828, "trubetskov_etal_2022_schizophrenia_european_grch37")
@@ -428,8 +428,8 @@ download_curl("https://hugesumstats.yale.edu/dl/extra_MVP_GPC1_sumstat_file",
 g_zip("Downloaded/EA4_additive_p1e-5_clumped.txt", 
       "okbay_etal_2022_eduyears_top_inc23andme_grch37")
 
-file_copy(glue("Source Data/Downloaded/EA4_additive_excl_23andMe.txt.gz"),
-          glue("Source Data/okbay_etal_2022_eduyears_all_excl3andme_grch37.txt"))
+file_copy("Source Data/Downloaded/EA4_additive_excl_23andMe.txt.gz",
+          "Source Data/okbay_etal_2022_eduyears_all_excl3andme_grch37.txt.gz")
 
 g_zip("Downloaded/EA4_excl_UKHLS_2024_12_09_publicSNPs.txt", 
       "okbay_etal_2022_eduyears_top_exclukhls_grch37")
