@@ -203,8 +203,8 @@ done
               --rm-dup exclude-mismatch \
               --maj-ref \
               --make-bed \
-              --out Data/step_01/ukhls_rsid_hg19_dedup
-rm Data/step_01/ukhls_rsid_hg19_dedup.{pvar,pgen,psam}
+              --out Data/step_01/ukhls_rsid_grch37_dedup
+rm Data/step_01/ukhls_rsid_grch37_dedup.{pvar,pgen,psam}
 
 for i in {1..22}; do
     rm Data/step_01/chr${i}_{info,reid,dedup}.{bed,bim,fam}
@@ -214,13 +214,13 @@ done
 ## a. Make Relationship Table and GRM ----
 # TODO: Should I be doing --degree 3?
 "${king}" \
-  -b "Data/step_01/ukhls_rsid_hg19_dedup.bed" \
-  --bim "Data/step_01/ukhls_rsid_hg19_dedup.bim" \
-  --fam "Data/step_01/ukhls_rsid_hg19_dedup.fam" \
+  -b "Data/step_01/ukhls_rsid_grch37_dedup.bed" \
+  --bim "Data/step_01/ukhls_rsid_grch37_dedup.bim" \
+  --fam "Data/step_01/ukhls_rsid_grch37_dedup.fam" \
   --cpus 8 \
   --related --degree 2 --prefix "Data/step_01/king_relatedness"
 
-"${gcta64}" --bfile "Data/step_01/ukhls_rsid_hg19_dedup" \
+"${gcta64}" --bfile "Data/step_01/ukhls_rsid_grch37_dedup" \
   --thread-num 8 --out "Data/step_01/gcta"
 
 ## b. Create new .fam File ----
@@ -240,7 +240,7 @@ pheno <- read_dta(pheno_file) %>%
          dob_y = as.integer(doby_dv)) %>%
   select(iid = id, sex, dob_y)
 
-fam <- read_delim("Data/step_01/ukhls_rsid_hg19_dedup.fam", 
+fam <- read_delim("Data/step_01/ukhls_rsid_grch37_dedup.fam", 
                   delim = "\t", 
                   col_names = c("fid", "iid", "pid", "mid", "sex", "pheno"))
 
@@ -312,76 +312,76 @@ Rscript  --no-save --no-restore Code/01d_update_fam.R "${pheno_file}"
 
 # 7. Remove High Missingness ----
 ## a. Variant-Level ----
-# --bfile Data/step_01/ukhls_rsid_hg19_dedup
-"${plink2}"   --bed Data/step_01/ukhls_rsid_hg19_dedup.bed \
-              --bim Data/step_01/ukhls_rsid_hg19_dedup.bim \
+# --bfile Data/step_01/ukhls_rsid_grch37_dedup
+"${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_dedup.bed \
+              --bim Data/step_01/ukhls_rsid_grch37_dedup.bim \
               --fam Data/step_01/king.fam \
               --geno 0.03 \
               --write-snplist \
-              --out Data/step_01/ukhls_rsid_hg19_geno
+              --out Data/step_01/ukhls_rsid_grch37_geno
 
 ## b. Sample-Level ----
-"${plink2}"   --bed Data/step_01/ukhls_rsid_hg19_dedup.bed \
-              --bim Data/step_01/ukhls_rsid_hg19_dedup.bim \
+"${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_dedup.bed \
+              --bim Data/step_01/ukhls_rsid_grch37_dedup.bim \
               --fam Data/step_01/king.fam \
-              --extract Data/step_01/ukhls_rsid_hg19_geno.snplist \
+              --extract Data/step_01/ukhls_rsid_grch37_geno.snplist \
               --mind 0.02 \
               --write-snplist \
               --write-samples \
-              --out Data/step_01/ukhls_rsid_hg19_mind
+              --out Data/step_01/ukhls_rsid_grch37_mind
 
 # 8. Remove SNPs with non-AGCT variants and Remove Upon Harvey-Weinberg Equilibrium ----
 # TODO: SHOULD I REMOVE SPECIAL CHARACTERS?
-# TODO: Keep SNP IDs that are also in  Data/step_01/ukhls_rsid_hg19_mind.snplist
+# TODO: Keep SNP IDs that are also in  Data/step_01/ukhls_rsid_grch37_mind.snplist
 awk '$5 ~ /^[AGCT]+$/ && $6 ~ /^[AGCT]+$/ { print $2 }' \
-  Data/step_01/ukhls_rsid_hg19_dedup.bim \
+  Data/step_01/ukhls_rsid_grch37_dedup.bim \
   > Data/step_01/agct.snplist
 
 awk '
   NR==FNR { keep[$1]; next } 
   $1 in keep { print }
 ' Data/step_01/agct.snplist \
-  Data/step_01/ukhls_rsid_hg19_mind.snplist \
+  Data/step_01/ukhls_rsid_grch37_mind.snplist \
   > Data/step_01/agct_mind_intersect.snplist
 
-wc --lines  Data/step_01/ukhls_rsid_hg19_dedup.bim \
+wc --lines  Data/step_01/ukhls_rsid_grch37_dedup.bim \
             Data/step_01/agct.snplist \
-            Data/step_01/ukhls_rsid_hg19_mind.snplist \
+            Data/step_01/ukhls_rsid_grch37_mind.snplist \
             Data/step_01/agct_mind_intersect.snplist
             
-"${plink2}"   --bed Data/step_01/ukhls_rsid_hg19_dedup.bed \
-              --bim Data/step_01/ukhls_rsid_hg19_dedup.bim \
+"${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_dedup.bed \
+              --bim Data/step_01/ukhls_rsid_grch37_dedup.bim \
               --fam Data/step_01/king.fam \
               --extract Data/step_01/agct_mind_intersect.snplist \
-              --keep Data/step_01/ukhls_rsid_hg19_mind.id \
+              --keep Data/step_01/ukhls_rsid_grch37_mind.id \
               --hwe 1e-6 \
               --write-snplist \
               --write-samples \
-              --out Data/step_01/ukhls_rsid_hg19_hwe
+              --out Data/step_01/ukhls_rsid_grch37_hwe
 
 
 # 9. Filter on Het Scores ----
 ## TODO: Check if LD should be calculated from refeence panel instead.
 ## TODO: Chucks out way too much - also why am I chucking out high LD regions if C+T will do this?
 ## a. Calculate LD and Het Scores ----
-"${plink2}"   --bed Data/step_01/ukhls_rsid_hg19_dedup.bed \
-              --bim Data/step_01/ukhls_rsid_hg19_dedup.bim \
+"${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_dedup.bed \
+              --bim Data/step_01/ukhls_rsid_grch37_dedup.bim \
               --fam Data/step_01/king.fam \
-              --extract Data/step_01/ukhls_rsid_hg19_hwe.snplist \
-              --keep Data/step_01/ukhls_rsid_hg19_hwe.id \
+              --extract Data/step_01/ukhls_rsid_grch37_hwe.snplist \
+              --keep Data/step_01/ukhls_rsid_grch37_hwe.id \
               --indep-pairwise 200 50 0.25 \
-              --out Data/step_01/ukhls_rsid_hg19_ld
+              --out Data/step_01/ukhls_rsid_grch37_ld
 
-wc --lines  Data/step_01/ukhls_rsid_hg19_ld.prune.in \
-            Data/step_01/ukhls_rsid_hg19_ld.prune.out
+wc --lines  Data/step_01/ukhls_rsid_grch37_ld.prune.in \
+            Data/step_01/ukhls_rsid_grch37_ld.prune.out
 
-"${plink2}"   --bed Data/step_01/ukhls_rsid_hg19_dedup.bed \
-              --bim Data/step_01/ukhls_rsid_hg19_dedup.bim \
+"${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_dedup.bed \
+              --bim Data/step_01/ukhls_rsid_grch37_dedup.bim \
               --fam Data/step_01/king.fam \
-              --extract Data/step_01/ukhls_rsid_hg19_ld.prune.in \
-              --keep Data/step_01/ukhls_rsid_hg19_hwe.id \
+              --extract Data/step_01/ukhls_rsid_grch37_ld.prune.in \
+              --keep Data/step_01/ukhls_rsid_grch37_hwe.id \
               --het \
-              --out Data/step_01/ukhls_rsid_hg19_pruned
+              --out Data/step_01/ukhls_rsid_grch37_pruned
 
 ## b. Find Samples with |Het| > 3SD ----
 cat > Code/01e_munge_het.R << EOM
@@ -389,7 +389,7 @@ library(tidyverse)
 
 rm(list = ls())
 
-het_ids <- read_delim("Data/step_01/ukhls_rsid_hg19_pruned.het",
+het_ids <- read_delim("Data/step_01/ukhls_rsid_grch37_pruned.het",
                       col_select = c("#FID", "IID", "F")) %>%
   rename(fid = 1, iid = 2, f = 3) %>%
   mutate(f_scale = scale(f) %>% as.double()) %>%
@@ -402,49 +402,49 @@ EOM
 Rscript  --no-save --no-restore Code/01e_munge_het.R
 
 ## c. Calculate LD and Het Scores ----
-"${plink2}"   --bed Data/step_01/ukhls_rsid_hg19_dedup.bed \
-              --bim Data/step_01/ukhls_rsid_hg19_dedup.bim \
+"${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_dedup.bed \
+              --bim Data/step_01/ukhls_rsid_grch37_dedup.bim \
               --fam Data/step_01/king.fam \
-              --extract Data/step_01/ukhls_rsid_hg19_hwe.snplist \
+              --extract Data/step_01/ukhls_rsid_grch37_hwe.snplist \
               --keep Data/step_01/het.id \
               --make-bed \
-              --out Data/step_01/ukhls_rsid_hg19_ld
+              --out Data/step_01/ukhls_rsid_grch37_ld
 
 # TODO: Any other steps? Remove IBD outliers?
 
 
 # 9. Create chr:bp and hg38 versions ----
-## a. chr:bp hg19 ----
-"${plink2}"   --bfile Data/step_01/ukhls_rsid_hg19_ld \
+## a. chr:bp grch37 ----
+"${plink2}"   --bfile Data/step_01/ukhls_rsid_grch37_ld \
               --rm-dup exclude-mismatch \
               --set-all-var-ids chr@:# \
               --make-bed \
-              --out Data/step_01/ukhls_chrbp_hg19_ld
+              --out Data/step_01/ukhls_chrbp_grch37_ld
 
-head Data/step_01/ukhls_rsid_hg19_ld.bim
-head Data/step_01/ukhls_chrbp_hg19_ld.bim
+head Data/step_01/ukhls_rsid_grch37_ld.bim
+head Data/step_01/ukhls_chrbp_grch37_ld.bim
 
 ## b. LiftOver rsid to hg38 ----
 ### Get new coordinates ----
 awk '{ print "chr"$1, $4, $4, $2 }' OFS='\t' \
-  Data/step_01/ukhls_rsid_hg19_ld.bim \
-  > Data/step_01/ukhls_rsid_hg19_tolift.txt 
+  Data/step_01/ukhls_rsid_grch37_ld.bim \
+  > Data/step_01/ukhls_rsid_grch37_tolift.txt 
 
 "${executable_dir}/liftOver" -bedPlus=3 \
-  Data/step_01/ukhls_rsid_hg19_tolift.txt \
+  Data/step_01/ukhls_rsid_grch37_tolift.txt \
   "${executable_dir}/hg19ToHg38.over.chain.gz"  \
-  Data/step_01/ukhls_rsid_hg19_lifted.txt \
-  Data/step_01/ukhls_rsid_hg19_unlifted.txt
+  Data/step_01/ukhls_rsid_grch37_lifted.txt \
+  Data/step_01/ukhls_rsid_grch37_unlifted.txt
 
 ### Extract lifted SNPs ----
 awk '{ print $4 }' \
-  Data/step_01/ukhls_rsid_hg19_lifted.txt \
-  > Data/step_01/ukhls_rsid_hg19_lifted.snplist 
+  Data/step_01/ukhls_rsid_grch37_lifted.txt \
+  > Data/step_01/ukhls_rsid_grch37_lifted.snplist 
 
-"${plink2}"   --bfile Data/step_01/ukhls_rsid_hg19_ld \
-              --extract Data/step_01/ukhls_rsid_hg19_lifted.snplist  \
+"${plink2}"   --bfile Data/step_01/ukhls_rsid_grch37_ld \
+              --extract Data/step_01/ukhls_rsid_grch37_lifted.snplist  \
               --make-bed \
-              --out Data/step_01/ukhls_rsid_hg19_tolift
+              --out Data/step_01/ukhls_rsid_grch37_tolift
 
 ### Clean .bim with new coordinates ----
 cat > Code/01f_lift_bim.R << EOM
@@ -454,10 +454,10 @@ library(glue)
 rm(list = ls())
 
 # 1. Load Data ----
-bim <- read_tsv("Data/step_01/ukhls_rsid_hg19_tolift.bim",
-                col_names = c("chr", "snpid", "dist", "pos_hg19", "a1", "a2"))
+bim <- read_tsv("Data/step_01/ukhls_rsid_grch37_tolift.bim",
+                col_names = c("chr", "snpid", "dist", "pos_grch37", "a1", "a2"))
 
-lifted <- read_tsv("Data/step_01/ukhls_rsid_hg19_lifted.txt",
+lifted <- read_tsv("Data/step_01/ukhls_rsid_grch37_lifted.txt",
                    col_select = c("pos_hg38", "snpid"),
                    col_names = c("chr_chr", "pos_hg38", "end", "snpid"))
 
@@ -475,9 +475,9 @@ EOM
 Rscript  --no-save --no-restore Code/01f_lift_bim.R
 
 ### Merge new coordinates ----
-"${plink2}"   --bed Data/step_01/ukhls_rsid_hg19_tolift.bed \
+"${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_tolift.bed \
               --bim Data/step_01/ukhls_rsid_hg38_lifted.bim \
-              --fam Data/step_01/ukhls_rsid_hg19_tolift.fam \
+              --fam Data/step_01/ukhls_rsid_grch37_tolift.fam \
               --sort-vars \
               --rm-dup exclude-mismatch \
               --max-alleles 2 \
@@ -488,7 +488,7 @@ Rscript  --no-save --no-restore Code/01f_lift_bim.R
               --make-bed \
               --out Data/step_01/ukhls_rsid_hg38_ld
 
-rm Data/step_01/ukhls_rsid_hg19_tolift.{bed,bim,fam}
+rm Data/step_01/ukhls_rsid_grch37_tolift.{bed,bim,fam}
 rm Data/step_01/ukhls_rsid_hg38_ld.{psam,pvar,pgen}
 
 ## c. chr:bp hg38 ----
@@ -502,5 +502,5 @@ head Data/step_01/ukhls_rsid_hg38_ld.bim
 head Data/step_01/ukhls_chrbp_hg38_ld.bim
 
 # 10. Delete Files ----
-rm Data/step_01/ukhls_rsid_hg19_dedup.{bed,bim,fam}
+rm Data/step_01/ukhls_rsid_grch37_dedup.{bed,bim,fam}
 rm Data/step_01/chr{1..22}_{info,dedup}.{bed,bim,fam}

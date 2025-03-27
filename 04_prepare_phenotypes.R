@@ -3,6 +3,7 @@ library(labelled)
 library(glue)
 library(haven)
 library(summarytools)
+library(FactoMineR)
 
 # 1. Load Data and Create Helpers ----
 dac_v1_fld <- Sys.getenv("ukhls_dac_v1_fld")
@@ -133,9 +134,7 @@ clean$anthro <- df_raw %>%
 
 
 ## c. Physical Health and Biomarkers ----
-clean$ph <- x
-
-df_raw %>%
+clean$ph <- df_raw %>%
   mutate(
     ### i Asthma (Han et al., 2020; org/10.1038/s41467-020-15649-3) ----
     asthma_w1 = clean_condition(a_hcond1, a_hconds01),
@@ -196,9 +195,7 @@ df_raw %>%
 
 
 ## d. Mental Health and Cognition ----
-clean$psych <- x
-
-df_raw %>%
+clean$psych <- df_raw %>%
   mutate(
     ### i. ADHD (Demontis et al., 2023; 10.1038/s41588-022-01285-8) ----
     ### ii. Alzheimer's Disease (Bellenguez et al., 2022; 10.1038/s41588-022-01024-z) ----
@@ -270,7 +267,7 @@ clean$sep <- df_raw %>%
 ## g. Extra Information ----
 clean$cov <- df_raw %>%
   mutate(sex_xwave = negative_to_na(sex_dv) %>% as_factor(),
-         dob_y_xwave = as.integet(birthy),
+         dob_y_xwave = as.integer(birthy),
          # TODO: Data request for age.
          #age_nv = 
            ) %>%

@@ -9,6 +9,8 @@ library(summarytools)
 rm(list = ls())
 
 # 1. Set Up Environment and Create Helpers ----
+# TODO: tabix lookup where rsids (or repeated rsids) aren't used, chr:bp otherwise
+# TODO: Step to remove duplicates
 # NOTE: Genetic data are build GRCh37 with rsid for SNP IDs.
 # Some of the SNP IDs do not follow the rsid format.
 # GRCh37 > GRCh38 > rsid
@@ -33,7 +35,7 @@ check_dbsnp <- function(search_term){
   glue("https://www.ncbi.nlm.nih.gov/snp/?term={curl_escape(search_term)}") %>%
     browseURL()
 }
-check_dbsnp("rs188996809")
+# check_dbsnp("rs188996809")
 
 add_gz <- function(file){
   file <- case_when(str_detect(file, "\\.txt$") ~ glue("{file}.gz"),
