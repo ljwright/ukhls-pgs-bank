@@ -271,4 +271,34 @@ clean$cov <- df_raw %>%
          # TODO: Data request for age.
          #age_nv = 
            ) %>%
-  select(id, matches("_(xwave|nw)^"))
+  select(id, matches("_(xwave|nw)$"))
+
+
+pgs <- read_delim("Data/test_2 copy.all_score",
+           skip = 1,
+           col_names = c("fid", "id", "yengo"))
+
+df <- clean$anthro %>%
+  full_join(clean$cov, by = "id") %>%
+  full_join(pgs, by = "id") %>%
+  select(id, bmi_xwave, dob_y_xwave, yengo) %>%
+  drop_na() %>%
+  mutate(yengo = scale(yengo) %>% as.numeric(),
+         obese = ifelse(bmi_xwave >= 30, 1, 0))
+
+ggplot(df) +
+  aes(x = yengo, y = bmi_xwave) +
+  geom_point()
+library(broom)
+
+mod <- lm(bmi_xwave ~ yengo, data = df)
+glance(mod)
+mod_adj <- lm(bmi_xwave ~ yengo + dob_y_xwave, data = df)
+mod_base <- lm(bmi_xwave ~ dob_y_xwave, data = df)
+glance(mod_adj)[[1]] - glance(mod_base)[[1]]
+
+
+
+predict(mod, newdata = df %>% distinct(obese), interval="confidence") %>%
+  as_tibble() %>%
+  bind_cols(df %>% distinct(obese))

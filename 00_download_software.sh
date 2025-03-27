@@ -38,7 +38,7 @@ tar -xvjf "${executable_dir}/bcftools-1.21.tar.bz2"  -C "${executable_dir}"
 make -C "${executable_dir}/bcftools-1.21"
 
 wget -nc -P "${executable_dir}" https://www.kingrelatedness.com/Linux-king.tar.gz
-tar -xzvf  "${executable_dir}/Linux-king.tar.gz"
+tar -xzvf  "${executable_dir}/Linux-king.tar.gz"  -C "${executable_dir}"
 
 wget -nc -P "${executable_dir}" "https://yanglab.westlake.edu.cn/software/gcta/bin/gcta-1.94.4-linux-kernel-3-x86_64.zip"
 unzip -o -j "${executable_dir}/gcta-1.94.4-linux-kernel-3-x86_64.zip" -d "${executable_dir}/gcta-1.94.4-linux-kernel-3-x86_64"
