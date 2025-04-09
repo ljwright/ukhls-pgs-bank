@@ -4,13 +4,14 @@
 #$ -l h_rt=5:00:00
 #$ -l mem=8G
 #$ -pe smp 8
-#$ -wd "/home/rmjllwr/Scratch/Projects/UKHLS Fellowship/Polygenic Scores Bank"
+#$ -wd "/myriadfs/home/rmjllwr/Projects/UKHLS Fellowship/Polygenic Scores Bank"
 
 # 0. Set up Environment -----
 # qrsh -pe smp 8 -l mem=8G,h_rt=2:00:00 -now n
-# qsub "Code/01_prepare_bed.sh"
+# qsub "Code/00_download_software.sh"
+
 ## a. Environment ----
-cd "/home/rmjllwr/Scratch/Projects/UKHLS Fellowship/Polygenic Scores Bank"
+cd "/myriadfs/home/rmjllwr/Projects/UKHLS Fellowship/Polygenic Scores Bank"
 source config.cfg
 
 ## b. Download Software ----

@@ -1,16 +1,16 @@
 #!/bin/bash -l
 #$ -m be
 #$ -N prepare_bed
-#$ -l h_rt=5:00:00
+#$ -l h_rt=24:00:00
 #$ -l mem=8G
 #$ -pe smp 8
-#$ -wd "/home/rmjllwr/Scratch/Projects/UKHLS Fellowship/Polygenic Scores Bank"
+#$ -wd "/myriadfs/home/rmjllwr/Projects/UKHLS Fellowship/Polygenic Scores Bank"
 
 # qrsh -pe smp 8 -l mem=8G,h_rt=2:00:00 -now n
-# qsub "Code/01_prepare_bed.sh"
+# qsub "Code/01_prepare_genetic_data.sh"
 
 # 0. Set up Environment -----
-cd "/home/rmjllwr/Scratch/Projects/UKHLS Fellowship/Polygenic Scores Bank"
+cd "/myriadfs/home/rmjllwr/Projects/UKHLS Fellowship/Polygenic Scores Bank"
 source config.cfg
 
 module -f unload compilers mpi gcc-libs
@@ -215,13 +215,8 @@ done
 # TODO: Should I be doing --degree 3?
 "${king}" \
   -b "Data/step_01/ukhls_rsid_grch37_dedup.bed" \
-  --bim "Data/step_01/ukhls_rsid_grch37_dedup.bim" \
-  --fam "Data/step_01/ukhls_rsid_grch37_dedup.fam" \
   --cpus 8 \
   --related --degree 2 --prefix "Data/step_01/king_relatedness"
-
-"${gcta64}" --bfile "Data/step_01/ukhls_rsid_grch37_dedup" \
-  --thread-num 8 --out "Data/step_01/gcta"
 
 ## b. Create new .fam File ----
 cat > Code/01d_update_fam.R << EOM
@@ -401,7 +396,7 @@ EOM
 
 Rscript  --no-save --no-restore Code/01e_munge_het.R
 
-## c. Calculate LD and Het Scores ----
+## c. Create .bed File ----
 "${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_dedup.bed \
               --bim Data/step_01/ukhls_rsid_grch37_dedup.bim \
               --fam Data/step_01/king.fam \
@@ -468,7 +463,7 @@ new_bim <- bim %>%
   mutate(new_id = ifelse(str_detect(snpid, "^rs"), snpid, glue("chr{chr}:{pos_hg38}"))) %>%
   select(chr, new_id, dist, pos_hg38, a1, a2)
 
-write_tsv(new_bim, "Data/step_01/ukhls_rsid_hg38_lifted.bim",
+write_tsv(new_bim, "Data/step_01/ukhls_rsid_grch38_lifted.bim",
           col_names = FALSE)
 EOM
 
@@ -476,30 +471,53 @@ Rscript  --no-save --no-restore Code/01f_lift_bim.R
 
 ### Merge new coordinates ----
 "${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_tolift.bed \
-              --bim Data/step_01/ukhls_rsid_hg38_lifted.bim \
+              --bim Data/step_01/ukhls_rsid_grch38_lifted.bim \
               --fam Data/step_01/ukhls_rsid_grch37_tolift.fam \
               --sort-vars \
               --rm-dup exclude-mismatch \
               --max-alleles 2 \
               --make-pgen \
-              --out Data/step_01/ukhls_rsid_hg38_ld
+              --out Data/step_01/ukhls_rsid_grch38_ld
 
-"${plink2}"   --pfile Data/step_01/ukhls_rsid_hg38_ld \
+"${plink2}"   --pfile Data/step_01/ukhls_rsid_grch38_ld \
               --make-bed \
-              --out Data/step_01/ukhls_rsid_hg38_ld
+              --out Data/step_01/ukhls_rsid_grch38_ld
 
 rm Data/step_01/ukhls_rsid_grch37_tolift.{bed,bim,fam}
-rm Data/step_01/ukhls_rsid_hg38_ld.{psam,pvar,pgen}
+rm Data/step_01/ukhls_rsid_grch38_ld.{psam,pvar,pgen}
 
 ## c. chr:bp hg38 ----
-"${plink2}"   --bfile Data/step_01/ukhls_rsid_hg38_ld \
+"${plink2}"   --bfile Data/step_01/ukhls_rsid_grch38_ld \
               --rm-dup exclude-mismatch \
               --set-all-var-ids chr@:# \
               --make-bed \
-              --out Data/step_01/ukhls_chrbp_hg38_ld
+              --out Data/step_01/ukhls_chrbp_grch38_ld
 
-head Data/step_01/ukhls_rsid_hg38_ld.bim
-head Data/step_01/ukhls_chrbp_hg38_ld.bim
+head Data/step_01/ukhls_rsid_grch38_ld.bim
+head Data/step_01/ukhls_chrbp_grch38_ld.bim
+
+# 10. Create .bed Files of Unrelated Individuals ----
+## Q. Is ths in the wrong place? Should I have had a unrelated .bed file to calculate LD?
+## a. Creat GRM and KING Unrelated ----
+"${gcta64}" --bfile "Data/step_01/ukhls_rsid_grch37_ld" \
+  --thread-num 8 \
+  --make-grm \
+  --out "Data/step_01/gcta"
+
+"${gcta64}" --grm "Data/step_01/gcta" \
+  --thread-num 8 \
+  --grm-cutoff 0.05 \
+  --make-grm \
+  --out "Data/step_01/gcta_unrelated"
+
+## b. Filter .bed Files ----
+file_stubs=("rsid_grch37" "rsid_grch38" "chrbp_grch37" "chrbp_grch38" ) 
+for stub in "${file_stubs[@]}"; do
+  "${plink2}"   --bfile "Data/step_01/ukhls_${stub}_ld" \
+                --keep "Data/step_01/gcta_unrelated.grm.id" \
+                --make-bed \
+                --out Data/step_01/ukhls_${stub}_unrelated
+done
 
 # 10. Delete Files ----
 rm Data/step_01/ukhls_rsid_grch37_dedup.{bed,bim,fam}

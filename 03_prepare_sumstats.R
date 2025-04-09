@@ -201,7 +201,10 @@ clean_yengo_etal_2022 <- function(file){
   df <- open_source(file, c(3:6, 8, 10)) %>%
     rename_with(str_to_lower) %>%
     mutate(id = glue("chr{chr}:{pos}"),
-           across(c(beta, p), as.double))
+           across(c(beta, p), as.double)) %>%
+    group_by(id) %>%
+    filter(row_number() == 1) %>%
+    uncount()
   
   save_sumstats(df, file)
   rm(df)
