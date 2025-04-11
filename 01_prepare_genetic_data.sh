@@ -93,15 +93,15 @@ Rscript  --no-save --no-restore Code/01b_filter_info.R
 ## c. Filter on INFO Scores and Convert to .bed ----
 rm Data/step_01/merge_info.txt
 for i in {1..22}; do
-    "${plink2}" --gen "Data/step_01/chr${i}_geno.gen.gz" ref-unknown \
-                --sample "Data/step_01/chr${i}_geno.sample" \
-                --oxford-single-chr ${i} \
-                --extract Data/step_01/chr${i}_info.txt \
-                --rm-dup exclude-mismatch \
-                --max-alleles 2 \
-                --memory 8000 --threads 8 \
-                --make-bed \
-                --out Data/step_01/chr${i}_info
+  "${plink2}" --gen "Data/step_01/chr${i}_geno.gen.gz" ref-unknown \
+              --sample "Data/step_01/chr${i}_geno.sample" \
+              --oxford-single-chr ${i} \
+              --extract Data/step_01/chr${i}_info.txt \
+              --rm-dup exclude-mismatch \
+              --max-alleles 2 \
+              --memory 8000 --threads 8 \
+              --make-bed \
+              --out Data/step_01/chr${i}_info
 
   echo Data/step_01/chr${i}_info >> Data/step_01/merge_info.txt
   # rm Data/step_01/chr${i}_geno.{gen.gz,sample}
@@ -120,14 +120,15 @@ done
               
 rm Data/step_01/ukhls_rsid_grch37_maf_temp.{pvar,pgen,psam}
 
-md5sum  chr{1..22}_info.fam ukhls_rsid_grch37_maf_temp.fam \
-        | awk '{print $1}' \
-        | uniq -c
+md5sum  Data/step_01/chr{1..22}_info.fam Data/step_01/ukhls_rsid_grch37_maf_temp.fam
+md5sum  Data/step_01/chr{1..22}_info.fam Data/step_01/ukhls_rsid_grch37_maf_temp.fam \
+  | awk '{print $1}'
+  | uniq -c
 
 ## b. Create Relationship Table using KING ----          
 "${king}" -b "Data/step_01/ukhls_rsid_grch37_maf_temp.bed" \
           --cpus 8 \
-          --related --degree 3 \
+          --related --unrelated --degree 3 \
           --prefix "Data/step_01/king_relatedness"
 
 ## c. Create new .fam Files ----
@@ -159,7 +160,7 @@ king <- read_delim("Data/step_01/king_relatedness.kin0",
   select(-id)
 
 # 2. Find Parents (Based on KING Relatedness) ----
-fam <- read_delim("Data/step_01/ukhls_rsid_grch37_maf_temp.fam", 
+fam <- read_delim("Data/step_01/chr1_info.fam", 
                   delim = "\t", 
                   col_names = c("fid", "iid", "pid", "mid", "sex", "pheno"))
 
@@ -184,14 +185,14 @@ df_parents <- king_chr %>%
 
 ## b. Unit Tests ----
 check_rel <- function(rel){
-  king %>%  # UNIT TEST: Siblings have same parents.
+  king %>%
     filter(rel == !!rel) %>%
     left_join(df_parents, by = c("iid.x" = "iid")) %>%
     left_join(df_parents, by = c("iid.y" = "iid")) %>%
     replace_na(list(mid.x = 0, mid.y = 0, pid.x = 0, pid.y = 0)) %>%
     filter(mid.x != mid.y | pid.x != pid.y)
 }
-ret <- check_rel("FS") %>% nrow() # UNIT TEST: Siblings have same parents.
+check_rel("FS") %>% nrow() # UNIT TEST: Siblings have same parents.
 
 check_rel("2nd") %>% 
   filter(iid.x < iid.y) %>%
@@ -218,25 +219,14 @@ write_delim(king_fam, "Data/step_01/king.fam",
             delim = " ", col_names = FALSE)
 
 # 4. Find Unrelated Individuals ----
-no_relation <- fam %>%
-  filter(!(iid %in% king[["iid.x"]]),
-         !(iid %in% king[["iid.y"]])) %>%
-  pull(iid)
+unrelated <- read_delim("Data/step_01/king_relatednessunrelated.txt", col_names = FALSE) %>%
+  select(iid = 1)
 
-king_graph <- king %>%
-  select(from = iid.x, to = iid.y) %>%
-  graph_from_data_frame(directed = FALSE) %>%
-  add_vertices(nv = length(no_relation), names = no_relation)
+nrow(unrelated)
 
-set.seed(1)
-unrelated <- largest_ivs(king_graph) %>%
-  sample(1) %>%
-  pluck(1) %>%
-  names() %>%
-  as.integer()
-
-king_fam %>%
-  filter(iid %in% !!unrelated) %>%
+unrelated %>%
+  left_join(king_fam, by = "iid") %>%
+  select(fid, iid) %>%
   write_tsv("Data/step_01/king_unrelated.id", col_names = FALSE)
 EOM
 
@@ -466,7 +456,6 @@ Rscript  --no-save --no-restore Code/01e_munge_het.R
 
 cat > Code/01f_get_final_unrelated.R << EOM
 library(tidyverse)
-library(igraph)
 
 rm(list = ls())
 
@@ -475,31 +464,13 @@ fam <- read_delim("Data/step_01/ukhls_chrbp_grch37_ld.fam",
                   delim = "\t", 
                   col_names = c("fid", "iid", "pid", "mid", "sex", "pheno"))
 
-king <- read_delim("Data/step_01/king_relatedness.kin0",
-                   delim = "\t") %>%
-  select(from = ID1, to = ID2) %>%
-  filter(from %in% fam[["iid"]],
-         to %in% fam[["iid"]])
+unrelated <- read_delim("Data/step_01/king_relatednessunrelated.txt", col_names = FALSE) %>%
+  select(iid = 1)
 
-no_relation <- fam %>%
-  filter(!(iid %in% king[["iid.x"]]),
-         !(iid %in% king[["iid.y"]])) %>%
-  pull(iid)
+nrow(unrelated)
 
-king_graph <- king %>%
-  select(from = iid.x, to = iid.y) %>%
-  graph_from_data_frame(directed = FALSE) %>%
-  add_vertices(nv = length(no_relation), names = no_relation)
-
-set.seed(1)
-unrelated <- largest_ivs(king_graph) %>%
-  sample(1) %>%
-  pluck(1) %>%
-  names() %>%
-  as.integer()
-
-fam %>%
-  filter(iid %in% !!unrelated) %>%
+unrelated %>%
+  left_join(fam, by = "iid") %>%
   select(fid, iid) %>%
   write_tsv("Data/step_01/final_king_unrelated.id", col_names = FALSE)
 EOM
@@ -516,141 +487,3 @@ Rscript  --no-save --no-restore Code/01f_get_final_unrelated.R
 # 11. Delete Files ----
 rm Data/step_01/ukhls_rsid_grch37_dedup.{bed,bim,fam}
 rm Data/step_01/chr{1..22}_{info,dedup}.{bed,bim,fam}
-
-
-# # 7. Find Unrelateds Using GCTA ----
-# "${gcta64}" --bfile "Data/step_01/ukhls_rsid_grch37_maf_temp" \
-#   --thread-num 8 \
-#   --make-grm \
-#   --out "Data/step_01/gcta"
-
-# "${gcta64}" --grm "Data/step_01/gcta" \
-#   --thread-num 8 \
-#   --grm-cutoff 0.05 \
-#   --make-grm \
-#   --out "Data/step_01/gcta_unrelated"
-
-# rm  Data/step_01/ukhls_rsid_grch37_maf_temp.{bed,bim,fam}
-
-# # 9. Create chr:bp and hg38 versions ----
-# ## a. chr:bp grch37 ----
-# "${plink2}"   --bfile Data/step_01/ukhls_rsid_grch37_ld \
-#               --rm-dup exclude-mismatch \
-#               --set-all-var-ids chr@:# \
-#               --make-bed \
-#               --out Data/step_01/ukhls_chrbp_grch37_ld
-
-# head Data/step_01/ukhls_rsid_grch37_ld.bim
-# head Data/step_01/ukhls_chrbp_grch37_ld.bim
-
-# ## b. LiftOver rsid to hg38 ----
-# ### Get new coordinates ----
-# awk '{ print "chr"$1, $4, $4, $2 }' OFS='\t' \
-#   Data/step_01/ukhls_rsid_grch37_ld.bim \
-#   > Data/step_01/ukhls_rsid_grch37_tolift.txt 
-
-# "${executable_dir}/liftOver" -bedPlus=3 \
-#   Data/step_01/ukhls_rsid_grch37_tolift.txt \
-#   "${executable_dir}/hg19ToHg38.over.chain.gz"  \
-#   Data/step_01/ukhls_rsid_grch37_lifted.txt \
-#   Data/step_01/ukhls_rsid_grch37_unlifted.txt
-
-# ### Extract lifted SNPs ----
-# awk '{ print $4 }' \
-#   Data/step_01/ukhls_rsid_grch37_lifted.txt \
-#   > Data/step_01/ukhls_rsid_grch37_lifted.snplist 
-
-# "${plink2}"   --bfile Data/step_01/ukhls_rsid_grch37_ld \
-#               --extract Data/step_01/ukhls_rsid_grch37_lifted.snplist  \
-#               --make-bed \
-#               --out Data/step_01/ukhls_rsid_grch37_tolift
-
-# ### Clean .bim with new coordinates ----
-# cat > Code/01f_lift_bim.R << EOM
-# library(tidyverse)
-# library(glue)
-
-# rm(list = ls())
-
-# # 1. Load Data ----
-# bim <- read_tsv("Data/step_01/ukhls_rsid_grch37_tolift.bim",
-#                 col_names = c("chr", "snpid", "dist", "pos_grch37", "a1", "a2"))
-
-# lifted <- read_tsv("Data/step_01/ukhls_rsid_grch37_lifted.txt",
-#                    col_select = c("pos_hg38", "snpid"),
-#                    col_names = c("chr_chr", "pos_hg38", "end", "snpid"))
-
-# # 2. Merge and Create New SNP IDs ----
-# new_bim <- bim %>%
-#   left_join(lifted, by = "snpid") %>%
-#   drop_na() %>%
-#   mutate(new_id = ifelse(str_detect(snpid, "^rs"), snpid, glue("chr{chr}:{pos_hg38}"))) %>%
-#   select(chr, new_id, dist, pos_hg38, a1, a2)
-
-# write_tsv(new_bim, "Data/step_01/ukhls_rsid_grch38_lifted.bim",
-#           col_names = FALSE)
-# EOM
-
-# Rscript  --no-save --no-restore Code/01f_lift_bim.R
-
-# ### Merge new coordinates ----
-# "${plink2}"   --bed Data/step_01/ukhls_rsid_grch37_tolift.bed \
-#               --bim Data/step_01/ukhls_rsid_grch38_lifted.bim \
-#               --fam Data/step_01/ukhls_rsid_grch37_tolift.fam \
-#               --sort-vars \
-#               --rm-dup exclude-mismatch \
-#               --max-alleles 2 \
-#               --make-pgen \
-#               --out Data/step_01/ukhls_rsid_grch38_ld
-
-# "${plink2}"   --pfile Data/step_01/ukhls_rsid_grch38_ld \
-#               --make-bed \
-#               --out Data/step_01/ukhls_rsid_grch38_ld
-
-# rm Data/step_01/ukhls_rsid_grch37_tolift.{bed,bim,fam}
-# rm Data/step_01/ukhls_rsid_grch38_ld.{psam,pvar,pgen}
-
-# ## c. chr:bp hg38 ----
-# "${plink2}"   --bfile Data/step_01/ukhls_rsid_grch38_ld \
-#               --rm-dup exclude-mismatch \
-#               --set-all-var-ids chr@:# \
-#               --make-bed \
-#               --out Data/step_01/ukhls_chrbp_grch38_ld
-
-# head Data/step_01/ukhls_rsid_grch38_ld.bim
-# head Data/step_01/ukhls_chrbp_grch38_ld.bim
-
-# # 10. Create .bed Files of Unrelated Individuals ----
-# ## Q. Is ths in the wrong place? Should I have had a unrelated .bed file to calculate LD?
-# ## a. Creat GRM and KING Unrelated ----
-# "${gcta64}" --bfile "Data/step_01/ukhls_rsid_grch37_ld" \
-#   --thread-num 8 \
-#   --make-grm \
-#   --out "Data/step_01/gcta"
-
-# "${gcta64}" --grm "Data/step_01/gcta" \
-#   --thread-num 8 \
-#   --grm-cutoff 0.05 \
-#   --make-grm \
-#   --out "Data/step_01/gcta_unrelated"
-
-# "${king}" -b "Data/step_01/ukhls_rsid_grch37_ld.bed" \
-#       --cpus 8 \
-#       --unrelated \
-#       --degree 3 \
-#       --prefix "Data/step_01/king_unrelated"
-
-# "${king}" -b "Data/step_01/ukhls_rsid_grch37_ld.bed" \
-#       --cpus 8 \
-#       --related \
-#       --degree 3 \
-#       --prefix "Data/step_01/king_unrelated"
-
-# ## b. Filter .bed Files ----
-# file_stubs=("rsid_grch37" "rsid_grch38" "chrbp_grch37" "chrbp_grch38" ) 
-# for stub in "${file_stubs[@]}"; do
-#   "${plink2}"   --bfile "Data/step_01/ukhls_${stub}_ld" \
-#                 --keep "Data/step_01/gcta_unrelated.grm.id" \
-#                 --make-bed \
-#                 --out Data/step_01/ukhls_${stub}_unrelated
-# done
